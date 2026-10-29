@@ -1,0 +1,124 @@
+# Diagram-sized example. Replace every REPLACE_ME before you plan.
+# This file is not a default. Copy it to a gitignored terraform.tfvars if you intend to use it.
+# Do not apply this as a production build.
+
+aws_region          = "REPLACE_ME"
+allowed_account_ids = ["000000000000"]
+name_prefix         = "scf"
+owner               = "REPLACE_ME"
+team                = "scf-ls"
+
+# Shared S3 module accepts only dev, staging, prod.
+# SIT -> dev, UAT -> staging, Prod-DC -> prod. Prod-DR is out of scope.
+environment = "dev"
+
+# Example range only. Replace it if 10.0.0.0/16 overlaps anything you already use.
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["REPLACE_ME-a", "REPLACE_ME-b"]
+
+# Documentation range (TEST-NET-3). Not 0.0.0.0/0.
+alb_ingress_cidrs = ["203.0.113.0/24"]
+bank_staff_cidrs  = []
+
+# TEST-ONLY listeners so a first plan does not need real certificate ARNs.
+# Set the ARN and set the matching flag to false before any real use.
+external_certificate_arn         = null
+internal_certificate_arn         = null
+allow_insecure_external_listener = true
+allow_insecure_internal_listener = true
+
+create_instance_profile = true
+enable_data_nat_route   = true
+deletion_protection     = false
+
+bucket_name = "replace-me-scf-ls-files"
+
+# Tags are not chosen in this file. Comments name the release line only.
+# Nginx: 1.30.x. Older lines do not get security fixes.
+nginx_image = "REPLACE_ME"
+# Placeholder only. It must answer HTTP GET / with 200. Not a Veefin build.
+placeholder_image = "REPLACE_ME"
+# RabbitMQ: 4.3.x. 4.2 community support ended 31 Jul 2026. 4.3 ends 30 Nov 2026.
+rabbitmq_image = "REPLACE_ME"
+# Redis: previous minor that still receives fixes, after legal decides. 7.2 is end of life.
+redis_image = "REPLACE_ME"
+# MySQL: 8.4 LTS. 8.0 reached end of life on 30 Apr 2026.
+mysql_image = "REPLACE_ME"
+
+# Test boot is plaintext. TDD ports 5671 and 15671 need TLS this stack does not install.
+rabbitmq_tls              = false
+rabbitmq_client_port      = 5672
+rabbitmq_management_port  = 15672
+rabbitmq_cluster_ports    = [4369, 25672]
+redis_port                = 6379
+redis_cluster_ports       = [6379]
+mysql_port                = 3306
+
+# Instance types below are suggested equivalents of the TDD sizes, not module defaults.
+# web 2 vCPU / 4 GiB -> c7i.large
+# app and DB 4 vCPU / 16 GiB -> m7i.xlarge
+# RabbitMQ and Redis 2 vCPU / 4 GiB -> c7i.large
+# root_volume_gb 30 and data_volume_gb 50 are example disk sizes, not TDD figures.
+tiers = {
+  dmz_web = {
+    role              = "dmz_web"
+    count             = 2
+    instance_type     = "c7i.large"
+    root_volume_gb    = 30
+    container_port    = 80
+    health_check_path = "/"
+  }
+  mz_web = {
+    role              = "mz_web"
+    count             = 2
+    instance_type     = "c7i.large"
+    root_volume_gb    = 30
+    container_port    = 80
+    health_check_path = "/"
+  }
+  app = {
+    role              = "app"
+    count             = 2
+    instance_type     = "m7i.xlarge"
+    root_volume_gb    = 30
+    container_port    = 8080
+    health_check_path = "/"
+    default_target    = true
+  }
+  reporting = {
+    role              = "reporting_app"
+    count             = 2
+    instance_type     = "m7i.xlarge"
+    root_volume_gb    = 30
+    container_port    = 8081
+    health_check_path = "/"
+    path_patterns     = ["/reporting*"]
+    default_target    = false
+  }
+  rabbitmq = {
+    role           = "rabbitmq"
+    count          = 3
+    instance_type  = "c7i.large"
+    root_volume_gb = 30
+  }
+  redis = {
+    role           = "redis"
+    count          = 3
+    instance_type  = "c7i.large"
+    root_volume_gb = 30
+  }
+  core_db = {
+    role           = "mysql"
+    count          = 1
+    instance_type  = "m7i.xlarge"
+    root_volume_gb = 30
+    data_volume_gb = 50
+  }
+  reporting_db = {
+    role           = "mysql"
+    count          = 1
+    instance_type  = "m7i.xlarge"
+    root_volume_gb = 30
+    data_volume_gb = 50
+  }
+}

@@ -1,0 +1,79 @@
+# Copy this file to terraform.tfvars and replace every placeholder.
+# terraform.tfvars is gitignored. Do not put passwords or private keys in it.
+# The RDS master password is created in Secrets Manager, not here.
+#
+# terraform plan reads terraform.tfvars automatically. You should not be
+# prompted for these values. Omit a setting only when its comment says it
+# has a default.
+
+# =========================
+# General
+# =========================
+
+# Default: ap-south-1. The operating system image is resolved in this region.
+aws_region = "ap-south-1"
+
+team        = "los"
+owner       = "los-team"
+environment = "QA"
+
+# =========================
+# Network
+# =========================
+# Required. The modules do not create a VPC, subnet, or security group.
+# Replace these placeholders. They are not real IDs, and the x characters
+# fail validation on purpose.
+
+subnet_id          = "subnet-xxxxxxxxxxxxxxxxx"
+security_group_ids = ["sg-xxxxxxxxxxxxxxxxx"]
+
+# =========================
+# EC2
+# =========================
+
+ec2_name = "los-app"
+
+# Operating system for EC2.
+# Supported values: amazon_linux, ubuntu
+# Default: amazon_linux
+# Terraform resolves the latest x86_64 image in aws_region. No AMI ID is required.
+ami_type = "amazon_linux"
+
+# Default: t3.micro
+instance_type = "t3.micro"
+
+# Existing EC2 key pair name. The stack does not create a key pair.
+# Delete this line to launch without an SSH key (default: null).
+key_name = "los-dev-key"
+
+# Default: 8 GB. Allowed range: 8 to 100.
+root_volume_size = 8
+
+# Default: gp3
+root_volume_type = "gp3"
+
+# =========================
+# S3
+# =========================
+
+# Globally unique. Underscores are rejected. los-transactions-dev is a valid shape.
+bucket_name = "los-transactions-dev"
+
+# Default: true. Uncomment to suspend versioning.
+# versioning_enabled = false
+
+# =========================
+# RDS
+# =========================
+
+# Default: false. Leave this false for the personal/dev test.
+# true creates a database, storage, backups, and a Secrets Manager secret.
+create_rds = false
+
+# Required only when create_rds is true. Verify a live version first:
+#   aws rds describe-db-engine-versions --engine postgres --region ap-south-1 \
+#     --query "DBEngineVersions[].EngineVersion"
+# rds_engine_version = "16.8"
+
+# Required only when create_rds is true. At least two subnets in different AZs.
+# rds_subnet_ids = ["subnet-aaaaaaaaaaaaaaaaa", "subnet-bbbbbbbbbbbbbbbbb"]

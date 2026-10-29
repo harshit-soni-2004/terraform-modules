@@ -1,0 +1,124 @@
+#!/bin/bash
+# Amazon Linux 2023 only. dnf and the docker package name will not work on RHEL, Alma, or Rocky.
+# This file is a script. It does not contain a password. Passwords are created on the instance.
+set -euo pipefail
+dnf install -y docker xfsprogs
+systemctl enable --now docker
+
+role="${role}"
+tier="${tier_key}"
+image_nginx="${nginx_image}"
+image_placeholder="${placeholder_image}"
+image_rabbit="${rabbitmq_image}"
+image_redis="${redis_image}"
+image_mysql="${mysql_image}"
+
+if [ "$role" = "dmz_web" ] || [ "$role" = "mz_web" ]; then
+  cat > /etc/systemd/system/nginx-container.service <<UNIT
+[Unit]
+Description=Pinned Nginx container for $tier
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker rm -f nginx-$tier
+ExecStart=/usr/bin/docker run --name nginx-$tier --rm -p ${container_port}:80 $image_nginx
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now nginx-container.service
+  exit 0
+fi
+
+if [ "$role" = "app" ] || [ "$role" = "reporting_app" ]; then
+  docker run -d --name "PLACEHOLDER-$tier" --restart unless-stopped -p "${container_port}:80" "$image_placeholder"
+  exit 0
+fi
+
+if [ "$role" = "rabbitmq" ]; then
+  if [ "${rabbitmq_tls}" = "true" ]; then
+    echo "rabbitmq_tls is true but this stack does not install TLS certificates. Refusing to publish plaintext as 5671." >&2
+    exit 1
+  fi
+  docker run -d --name rabbitmq --restart unless-stopped \
+    -p "${rabbitmq_client_port}:5672" \
+    -p "${rabbitmq_management_port}:15672" \
+    "$image_rabbit"
+  exit 0
+fi
+
+if [ "$role" = "redis" ]; then
+  pass="$(openssl rand -hex 24)"
+  install -m 0600 /dev/null /root/redis.conf
+  printf 'bind 0.0.0.0\nport 6379\nappendonly yes\nrequirepass %s\n' "$pass" > /root/redis.conf
+  chmod 0600 /root/redis.conf
+  unset pass
+  # Password stays in the root-only config. It is not a process argument.
+  # --user root and a replaced entrypoint: the image's redis user cannot read a 0600 root file,
+  # and the stock entrypoint drops to that user.
+  docker run -d --name redis --restart unless-stopped \
+    --user root \
+    --entrypoint redis-server \
+    -p "${redis_port}:6379" \
+    -v /root/redis.conf:/root/redis.conf:ro \
+    "$image_redis" \
+    /root/redis.conf
+  exit 0
+fi
+
+if [ "$role" = "mysql" ]; then
+  root_src="$(findmnt -n -o SOURCE /)"
+  root_disk="$(lsblk -no PKNAME "$root_src" 2>/dev/null || true)"
+  if [ -z "$root_disk" ]; then
+    root_disk="$(basename "$root_src" | sed 's/p\?[0-9]*$//')"
+  fi
+  data_disk=""
+  for _ in $(seq 1 60); do
+    for name in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+      if [ "$name" != "$root_disk" ]; then
+        data_disk="$name"
+        break
+      fi
+    done
+    if [ -n "$data_disk" ]; then
+      break
+    fi
+    sleep 2
+  done
+  if [ -z "$data_disk" ]; then
+    echo "MySQL data volume did not appear" >&2
+    exit 1
+  fi
+  dev="/dev/$data_disk"
+  if ! blkid "$dev" >/dev/null 2>&1; then
+    mkfs.xfs "$dev"
+  fi
+  mkdir -p /var/lib/scf-mysql
+  if ! grep -q ' /var/lib/scf-mysql ' /etc/fstab; then
+    echo "UUID=$(blkid -s UUID -o value "$dev") /var/lib/scf-mysql xfs defaults,nofail 0 2" >> /etc/fstab
+  fi
+  if ! mountpoint -q /var/lib/scf-mysql; then
+    mount /var/lib/scf-mysql
+  fi
+  pass="$(openssl rand -hex 24)"
+  install -m 0600 /dev/null /root/mysql-root.password
+  printf '%s' "$pass" > /root/mysql-root.password
+  chmod 0600 /root/mysql-root.password
+  unset pass
+  # File only. No MYSQL_ROOT_PASSWORD in this command.
+  # The official entrypoint still copies the file into the process environment.
+  docker run -d --name mysql --restart unless-stopped \
+    -p "${mysql_port}:3306" \
+    -v /var/lib/scf-mysql:/var/lib/mysql \
+    -v /root/mysql-root.password:/root/mysql-root.password:ro \
+    -e MYSQL_ROOT_PASSWORD_FILE=/root/mysql-root.password \
+    "$image_mysql"
+  exit 0
+fi
+
+echo "Unknown role $role" >&2
+exit 1

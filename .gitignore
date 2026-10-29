@@ -1,0 +1,37 @@
+# Standalone tools (tracked in their own repositories)
+/security_scanner/
+/automated_patcher/
+/ami-hardening/
+/eks-ami/
+/security_poc/
+/ami-notes/
+/docs/
+
+# Private keys & credentials
+*.pem
+*.key
+*.id_rsa
+
+# Terraform state & variables
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+
+# Safe examples
+!terraform.tfvars.example
+!**/*.tfvars.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.log

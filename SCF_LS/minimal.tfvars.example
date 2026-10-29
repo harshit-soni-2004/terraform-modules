@@ -1,0 +1,111 @@
+# Smallest example: one instance of each tier, all t3.micro.
+# Subnets are still created in two Availability Zones. Both ALBs still span those two zones.
+# MySQL on t3.micro is tight. This is a test shape, not a sizing recommendation.
+# Replace every REPLACE_ME before you plan. Copy to a gitignored terraform.tfvars to use it.
+
+aws_region          = "REPLACE_ME"
+allowed_account_ids = ["000000000000"]
+name_prefix         = "scfm"
+owner               = "REPLACE_ME"
+team                = "scf-ls"
+
+# SIT -> dev, UAT -> staging, Prod-DC -> prod.
+environment = "dev"
+
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["REPLACE_ME-a", "REPLACE_ME-b"]
+
+alb_ingress_cidrs = ["203.0.113.0/24"]
+bank_staff_cidrs  = []
+
+external_certificate_arn         = null
+internal_certificate_arn         = null
+allow_insecure_external_listener = true
+allow_insecure_internal_listener = true
+
+create_instance_profile = true
+enable_data_nat_route   = true
+deletion_protection     = false
+
+bucket_name = "replace-me-scf-ls-files-min"
+
+# Release lines only. Tags are not selected in this file.
+# Nginx 1.30.x. RabbitMQ 4.3.x (support ends 30 Nov 2026). MySQL 8.4 LTS.
+# Redis tag waits on the legal license decision. Do not use 7.2.
+nginx_image       = "REPLACE_ME"
+placeholder_image = "REPLACE_ME"
+rabbitmq_image    = "REPLACE_ME"
+redis_image       = "REPLACE_ME"
+mysql_image       = "REPLACE_ME"
+
+rabbitmq_tls             = false
+rabbitmq_client_port     = 5672
+rabbitmq_management_port = 15672
+rabbitmq_cluster_ports   = [4369, 25672]
+redis_port               = 6379
+redis_cluster_ports      = [6379]
+mysql_port               = 3306
+
+tiers = {
+  dmz_web = {
+    role              = "dmz_web"
+    count             = 1
+    instance_type     = "t3.micro"
+    root_volume_gb    = 30
+    container_port    = 80
+    health_check_path = "/"
+  }
+  mz_web = {
+    role              = "mz_web"
+    count             = 1
+    instance_type     = "t3.micro"
+    root_volume_gb    = 30
+    container_port    = 80
+    health_check_path = "/"
+  }
+  app = {
+    role              = "app"
+    count             = 1
+    instance_type     = "t3.micro"
+    root_volume_gb    = 30
+    container_port    = 8080
+    health_check_path = "/"
+    default_target    = true
+  }
+  reporting = {
+    role              = "reporting_app"
+    count             = 1
+    instance_type     = "t3.micro"
+    root_volume_gb    = 30
+    container_port    = 8081
+    health_check_path = "/"
+    path_patterns     = ["/reporting*"]
+    default_target    = false
+  }
+  rabbitmq = {
+    role           = "rabbitmq"
+    count          = 1
+    instance_type  = "t3.micro"
+    root_volume_gb = 30
+  }
+  redis = {
+    role           = "redis"
+    count          = 1
+    instance_type  = "t3.micro"
+    root_volume_gb = 30
+  }
+  core_db = {
+    role           = "mysql"
+    count          = 1
+    instance_type  = "t3.micro"
+    root_volume_gb = 30
+    data_volume_gb = 20
+  }
+  reporting_db = {
+    role           = "mysql"
+    count          = 1
+    instance_type  = "t3.micro"
+    root_volume_gb = 30
+    data_volume_gb = 20
+  }
+}
